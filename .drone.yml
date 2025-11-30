@@ -1,0 +1,77 @@
+kind: pipeline
+name: full-cluster-deploy
+
+steps:
+  - name: lint
+    image: python:3.10
+    commands:
+      - pip install yamllint ansible-lint
+      - yamllint ../cluster-config/ansible/playbooks/
+      - ansible-lint ../cluster-config/ansible/playbooks/
+
+  - name: test
+    image: python:3.10
+    commands:
+      - cd ../cluster-tools/tests
+      - ./run-all-tests.sh
+
+  - name: setup-bootstrap
+    image: debian:12
+    commands:
+      - cd ../cluster-setup/bootstrap
+      - bash install-dependencies.sh
+      - bash setup-ssh-keys.sh
+      - bash prepare-nodes.sh
+      - bash verify-prerequisites.sh
+
+  - name: provision-infra
+    image: python:3.10
+    environment:
+      ANSIBLE_HOST_KEY_CHECKING: 'False'
+    commands:
+      - cd ../cluster-infra/scripts
+      - bash run-kubespray.sh deploy
+
+  - name: baseline-config
+    image: python:3.10
+    environment:
+      ANSIBLE_HOST_KEY_CHECKING: 'False'
+    commands:
+      - cd ../cluster-config/ansible
+      - ansible-playbook playbooks/site.yml
+      - ansible-playbook playbooks/infrastructure-services.yml
+
+  - name: deploy-monitoring
+    image: python:3.10
+    environment:
+      ANSIBLE_HOST_KEY_CHECKING: 'False'
+    commands:
+      - cd ../cluster-monitor-stack/ansible
+      - ansible-playbook playbooks/deploy-monitoring-stack.yaml
+
+  - name: deploy-apps
+    image: python:3.10
+    environment:
+      ANSIBLE_HOST_KEY_CHECKING: 'False'
+    commands:
+      - cd ../cluster-application-stack/ansible
+      - ansible-playbook playbooks/jellyfin.yml
+      # Add more app playbooks as needed
+
+  - name: validate
+    image: python:3.10
+    commands:
+      - cd ../cluster-tools/validation
+      - ./validate-cluster-health.sh
+      - ./validate-monitoring-stack.sh
+      - ./validate-network-connectivity.sh
+
+  - name: notify
+    image: curlimages/curl
+    commands:
+      - curl -X POST -d '{"status":"$DRONE_BUILD_STATUS"}' https://hooks.slack.com/services/your/webhook/url
+
+trigger:
+  event:
+    - push
+    - pull_request
