@@ -1,17 +1,40 @@
 # VMStation Operator Deployment Checklist
 
-## Phase 0 — Local Development Workspace
+## Phase 0 — Identity & Baseline Bootstrap
+1. [ ] Bootstrap FreeIPA and Keycloak SSO
+    - [ ] Run FreeIPA container on masternode (or homelab)
+    - [ ] Run Keycloak container and integrate with FreeIPA LDAP
+    - [ ] Document SSO endpoints and credentials
+    - [ ] Validate FreeIPA and Keycloak are reachable before cluster deployment
+2. [ ] Enforce baseline OS configuration using Ansible
+    - [ ] Run the baseline configuration playbook from `cluster-config/ansible` to automate network, sudoers (no root SSH), time sync, and security hardening
+    - [ ] Reference `cluster-config/README.md` and `BASELINE_REPORT.md`
+
+## Phase 1 — Local Development Workspace
 - [ ] Clone all organization repos into `vmstation-org` as subfolders (cluster-setup, cluster-config, cluster-monitor-stack, cluster-cicd, etc.)
 - [ ] Validate and test Ansible playbooks, manifests, and scripts locally
 - [ ] Review per-directory README and `docs/DEPLOYMENT_RUNBOOK.md`
 
-## Phase 1 — Manual Bootstrap on Production Machines
+## Phase 2 — Manual Bootstrap on Production Machines
 1. [ ] Prepare production machines and repo layout
-    - [ ] Create `/opt/vmstation-org` (or preferred path)
-    - [ ] Clone each required repo into matching subfolders
-2. [ ] Enforce baseline OS configuration
-    - [ ] Network, sudoers (no root SSH), time sync, security hardening
-    - [ ] Reference `cluster-config/README.md` and `BASELINE_REPORT.md`
+    - [x] Create `/opt/vmstation-org` (or preferred path)
+    - [x] Clone each required repo into matching subfolders
+    -   ```bash
+        ORG="jjbly-vmstation"
+        TARGET="/opt/vmstation-org"
+        sudo mkdir -p "$TARGET"
+        sudo chown jjbly:jjbly /opt/vmstation-org
+        cd "$TARGET"
+        for repo in cluster-setup cluster-config cluster-cicd cluster-monitor-stack cluster-application-stack cluster-infra cluster-tools cluster-docs; do
+        git clone "https://github.com/$ORG/$repo.git"
+        done
+        ```
+2. [x] Install Ansible
+    - [x] Ensure Ansible is installed and available on the production machine before running any playbooks
+    -   ```bash
+        sudo apt update
+        sudo apt install -y ansible
+        ```
 3. [ ] Use canonical inventory for all playbooks
     - [ ] `vmstation-org/cluster-setup/ansible/inventory/hosts.yml`
 4. [ ] Run baseline validation scripts
@@ -34,8 +57,12 @@
 10. [ ] Document and snapshot
     - [ ] Commit cluster-specific config and inventory changes
     - [ ] Record baseline and preflight outputs
+11. [ ] Integrate cert-manager with FreeIPA CA
+    - [ ] Configure cert-manager issuer to use FreeIPA CA
+    - [ ] Automate certificate requests for cluster workloads
+    - [ ] Document integration steps and renewal process
 
-## Phase 2 — Transition to kubectl and CI/CD Automation
+## Phase 3 — Transition to kubectl and CI/CD Automation
 - [ ] Export resource manifests to cluster-cicd (or GitOps repo)
 - [ ] Implement CI/CD pipeline jobs for validation, dry-run, promotion
 - [ ] Use cluster-cicd for orchestration, cluster-setup for playbooks/inventory
